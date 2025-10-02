@@ -3,6 +3,10 @@ ICML'19: [How does Disagreement Help Generalization against Label Corruption?](h
 
 ========
 
+## Dataset
+
+- The Tiny-Imagenet can be downloaded by following the instructions at: https://github.com/rmccorm4/Tiny-Imagenet-200
+
 ## Run Co-teaching+ on benchmark datasets with PyTorch >= 0.4.1
 ```bash
 sh script/mnist.sh
