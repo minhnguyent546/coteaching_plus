@@ -44,7 +44,8 @@ torch.cuda.manual_seed(args.seed)
 
 # Hyper Parameters
 batch_size = 128
-learning_rate = args.lr 
+learning_rate = args.lr
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # load dataset
 if args.dataset=='mnist':
@@ -232,12 +233,12 @@ def train(train_loader,epoch, model1, optimizer1, model2, optimizer2):
     for i, (data, labels, indexes) in enumerate(train_loader):
         ind=indexes.cpu().numpy().transpose()
       
-        labels = Variable(labels).cuda()
+        labels = Variable(labels).to(device)
         
         if args.dataset=='news':
-            data = Variable(data.long()).cuda()
+            data = Variable(data.long()).to(device)
         else:
-            data = Variable(data).cuda()
+            data = Variable(data).to(device)
         # Forward + Backward + Optimize
         logits1=model1(data)
         prec1,  = accuracy(logits1, labels, topk=(1, ))
@@ -276,9 +277,9 @@ def evaluate(test_loader, model1, model2):
     total1 = 0
     for data, labels, _ in test_loader:
         if args.dataset=='news':
-            data = Variable(data.long()).cuda()
+            data = Variable(data.long()).to(device)
         else:
-            data = Variable(data).cuda()
+            data = Variable(data).to(device)
         logits1 = model1(data)
         outputs1 = F.softmax(logits1, dim=1)
         _, pred1 = torch.max(outputs1.data, 1)
@@ -290,9 +291,9 @@ def evaluate(test_loader, model1, model2):
     total2 = 0
     for data, labels, _ in test_loader:
         if args.dataset=='news':
-            data = Variable(data.long()).cuda()
+            data = Variable(data.long()).to(device)
         else:
-            data = Variable(data).cuda()
+            data = Variable(data).to(device)
         logits2 = model2(data)
         outputs2 = F.softmax(logits2, dim=1)
         _, pred2 = torch.max(outputs2.data, 1)
@@ -330,7 +331,7 @@ def main():
     if args.dataset=='imagenet_tiny':
         clf1 = PreActResNet18(num_classes=200)
 
-    clf1.cuda()
+    clf1.to(device)
     print(clf1.parameters)
     optimizer1 = torch.optim.Adam(clf1.parameters(), lr=learning_rate)
     
@@ -345,7 +346,7 @@ def main():
     if args.dataset=='imagenet_tiny':
         clf2 = PreActResNet18(num_classes=200)
 
-    clf2.cuda()
+    clf2.to(device)
     print(clf2.parameters)
     optimizer2 = torch.optim.Adam(clf2.parameters(), lr=learning_rate)
 
