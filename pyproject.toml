@@ -8,4 +8,6 @@ dependencies = [
     "numpy<2.0.0",
     "torch<2.0.0",
     "torchvision>=0.14.1",
+    "uv>=0.8.22",
+    "wandb>=0.22.1",
 ]
