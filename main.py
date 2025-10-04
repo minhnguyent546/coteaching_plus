@@ -23,9 +23,9 @@ from loss import loss_coteaching, loss_coteaching_plus
 parser = argparse.ArgumentParser()
 parser.add_argument('--lr', type = float, default = 0.001)
 parser.add_argument('--result_dir', type = str, help = 'dir to save result txt files', default = 'results/')
+parser.add_argument('--noise_type', type = str, choices=['pairflip', 'symmetric'], help='type of noise', default=None)
 parser.add_argument('--noise_rate', type = float, help = 'corruption rate, should be less than 1', default = 0.2)
 parser.add_argument('--forget_rate', type = float, help = 'forget rate', default = None)
-parser.add_argument('--noise_type', type = str, help='[pairflip, symmetric]', default='symmetric')
 parser.add_argument('--num_gradual', type = int, default = 10, help='how many epochs for linear drop rate. This parameter is equal to Ek for lambda(E) in the paper.')
 parser.add_argument('--dataset', type = str, help = 'mnist, cifar10, cifar100, or imagenet_tiny', default = 'mnist')
 parser.add_argument('--n_epoch', type=int, default=200)
@@ -167,7 +167,11 @@ if args.dataset == 'imagenet_tiny':
     init_epoch = 100
     #data_root = '/home/xingyu/Data/phd/data/imagenet-tiny/tiny-imagenet-200'
     data_root = 'data/imagenet-tiny/tiny-imagenet-200'
-    train_kv = "train_noisy_%s_%s_kv_list.txt" % (args.noise_type, args.noise_rate)
+    if args.noise_type is None:
+        train_kv = "train_kv_list.txt"
+    else:
+        train_kv = "train_noisy_%s_%s_kv_list.txt" % (args.noise_type, args.noise_rate)
+
     test_kv = "val_kv_list.txt"
 
     normalize = transforms.Normalize(mean=[0.4802, 0.4481, 0.3975],
@@ -193,7 +197,10 @@ else:
     forget_rate=args.forget_rate
 
 if args.dataset == 'imagenet_tiny':
-    is_label_clean = np.load(os.path.join(data_root, 'noise_or_not_%s_%s.npy' %(args.noise_type, args.noise_rate)))
+    if args.noise_type is None:
+        is_label_clean = np.load(os.path.join(data_root, 'noise_or_not_clean.npy'))
+    else:
+        is_label_clean = np.load(os.path.join(data_root, 'noise_or_not_%s_%s.npy' %(args.noise_type, args.noise_rate)))
 else:
     is_label_clean = train_dataset.noise_or_not
 
@@ -231,7 +238,10 @@ save_dir = args.result_dir +'/' +args.dataset+'/%s/' % args.model_type
 if not os.path.exists(save_dir):
     os.system('mkdir -p %s' % save_dir)
 
-model_str = args.dataset + '_%s_' % args.model_type + args.noise_type + '_' + str(args.noise_rate)
+if args.noise_type is None:
+    model_str = args.dataset + '_%s_' % args.model_type + 'clean'
+else:
+    model_str = args.dataset + '_%s_' % args.model_type + args.noise_type + '_' + str(args.noise_rate)
 
 txtfile = save_dir + "/" + model_str + ".txt"
 nowTime=datetime.datetime.now().strftime('%Y-%m-%d-%H:%M:%S')
