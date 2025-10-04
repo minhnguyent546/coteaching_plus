@@ -193,9 +193,9 @@ else:
     forget_rate=args.forget_rate
 
 if args.dataset == 'imagenet_tiny':
-    noise_or_not = np.load(os.path.join(data_root, 'noise_or_not_%s_%s.npy' %(args.noise_type, args.noise_rate)))
+    is_label_clean = np.load(os.path.join(data_root, 'noise_or_not_%s_%s.npy' %(args.noise_type, args.noise_rate)))
 else:
-    noise_or_not = train_dataset.noise_or_not
+    is_label_clean = train_dataset.noise_or_not
 
 # Adjust learning rate and betas for Adam Optimizer
 mom1 = 0.9
@@ -284,10 +284,10 @@ def train(train_loader,epoch, model1, optimizer1, model2, optimizer2, global_ste
         train_total2+=1
         train_correct2+=prec2
         if epoch < init_epoch:
-            loss_1, loss_2, _, _ = loss_coteaching(logits1, logits2, labels, rate_schedule[epoch], ind, noise_or_not)
+            loss_1, loss_2, selected_clean_frac1, selected_clean_frac2 = loss_coteaching(logits1, logits2, labels, rate_schedule[epoch], ind, is_label_clean)
         else:
             if args.model_type=='coteaching_plus':
-                loss_1, loss_2, _, _ = loss_coteaching_plus(logits1, logits2, labels, rate_schedule[epoch], ind, noise_or_not, epoch*i)
+                loss_1, loss_2, selected_clean_frac1, selected_clean_frac2 = loss_coteaching_plus(logits1, logits2, labels, rate_schedule[epoch], ind, is_label_clean, epoch*i)
 
         optimizer1.zero_grad()
         loss_1.backward()
@@ -299,8 +299,8 @@ def train(train_loader,epoch, model1, optimizer1, model2, optimizer2, global_ste
         global_step += 1
 
         if (i+1) % args.print_freq == 0:
-            print('Epoch [%d/%d], Iter [%d/%d] Training Accuracy1: %.4F, Training Accuracy2: %.4f, Loss1: %.4f, Loss2: %.4f'
-                  %(epoch+1, args.n_epoch, i+1, len(train_dataset)//batch_size, prec1, prec2, loss_1.item(), loss_2.item()))
+            print('Epoch [%d/%d], Iter [%d/%d] train_acc1: %.4F, train_acc2: %.4f, loss1: %.4f, loss2: %.4f, clean_frac1: %.4f, clean_frac2: %.4f'
+                  %(epoch+1, args.n_epoch, i+1, len(train_dataset)//batch_size, prec1, prec2, loss_1.item(), loss_2.item(), selected_clean_frac1, selected_clean_frac2))
 
         if wandb_run is not None:
             log_data = {
@@ -309,6 +309,8 @@ def train(train_loader,epoch, model1, optimizer1, model2, optimizer2, global_ste
             }
             log_data['train/loss1'] = loss_1.item()
             log_data['train/loss2'] = loss_2.item()
+            log_data['train/selected_clean_frac1'] = selected_clean_frac1
+            log_data['train/selected_clean_frac2'] = selected_clean_frac2
             wandb_run.log(log_data, step=global_step)
 
     train_acc1=float(train_correct)/float(train_total)

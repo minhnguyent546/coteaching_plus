@@ -7,7 +7,7 @@ import numpy as np
 from numpy.testing import assert_array_almost_equal
 
 # Loss functions
-def loss_coteaching(logits1, logits2, labels, forget_rate, ind, noise_or_not):
+def loss_coteaching(logits1, logits2, labels, forget_rate, ind, is_label_clean):
     loss_1 = F.cross_entropy(logits1, labels, reduction='none')
     ind_1_sorted = np.argsort(loss_1.cpu().data).cuda()
     loss_1_sorted = loss_1[ind_1_sorted]
@@ -26,15 +26,15 @@ def loss_coteaching(logits1, logits2, labels, forget_rate, ind, noise_or_not):
         ind_2_update = ind_2_sorted.cpu().numpy()
         num_remember = ind_1_update.shape[0]
 
-    pure_ratio_1 = np.sum(noise_or_not[ind[ind_1_update]])/float(num_remember)
-    pure_ratio_2 = np.sum(noise_or_not[ind[ind_2_update]])/float(num_remember)
+    selected_clean_frac1 = np.sum(is_label_clean[ind[ind_1_update]])/float(num_remember)
+    selected_clean_frac2 = np.sum(is_label_clean[ind[ind_2_update]])/float(num_remember)
 
     loss_1_update = F.cross_entropy(logits1[ind_2_update], labels[ind_2_update])
     loss_2_update = F.cross_entropy(logits2[ind_1_update], labels[ind_1_update])
 
-    return torch.sum(loss_1_update), torch.sum(loss_2_update), pure_ratio_1, pure_ratio_2
+    return torch.sum(loss_1_update), torch.sum(loss_2_update), selected_clean_frac1, selected_clean_frac2
 
-def loss_coteaching_plus(logits1, logits2, labels, forget_rate, ind, noise_or_not, step):
+def loss_coteaching_plus(logits1, logits2, labels, forget_rate, ind, is_label_clean, step):
     pred1 = torch.argmax(logits1, dim=1)
     pred2 = torch.argmax(logits2, dim=1)
 
@@ -62,7 +62,7 @@ def loss_coteaching_plus(logits1, logits2, labels, forget_rate, ind, noise_or_no
         updated_logits1 = logits1[disagree_indices]
         updated_logits2 = logits2[disagree_indices]
 
-        loss_1, loss_2, pure_ratio_1, pure_ratio_2 = loss_coteaching(updated_logits1, updated_logits2, updated_labels, forget_rate, ind_disagree, noise_or_not)
+        loss_1, loss_2, selected_clean_frac1, selected_clean_frac2 = loss_coteaching(updated_logits1, updated_logits2, updated_labels, forget_rate, ind_disagree, is_label_clean)
     else:
         updated_labels = labels
         updated_logits1 = logits1
@@ -74,8 +74,8 @@ def loss_coteaching_plus(logits1, logits2, labels, forget_rate, ind, noise_or_no
         loss_1 = torch.sum(update_step * cross_entropy_1) / labels.shape[0]
         loss_2 = torch.sum(update_step * cross_entropy_2) / labels.shape[0]
 
-        pure_ratio_1 = np.sum(noise_or_not[ind]) / ind.shape[0]
-        pure_ratio_2 = np.sum(noise_or_not[ind]) / ind.shape[0]
+        selected_clean_frac1 = np.sum(is_label_clean[ind]) / ind.shape[0]
+        selected_clean_frac2 = np.sum(is_label_clean[ind]) / ind.shape[0]
 
-    return loss_1, loss_2, pure_ratio_1, pure_ratio_2
+    return loss_1, loss_2, selected_clean_frac1, selected_clean_frac2
 
