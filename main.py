@@ -34,7 +34,7 @@ parser.add_argument('--seed', type=int, default=1)
 parser.add_argument('--print_freq', type=int, default=50)
 parser.add_argument('--num_workers', type=int, default=4, help='how many subprocesses to use for data loading')
 parser.add_argument('--epoch_decay_start', type=int, default=80)
-parser.add_argument('--model_type', type = str, help='[coteaching, coteaching_plus]', default='coteaching_plus')
+parser.add_argument('--model_type', type = str, choices=['coteaching', 'coteaching_plus'], help='training type', default='coteaching_plus')
 parser.add_argument('--fr_type', type = str, help='forget rate type', default='type_1')
 parser.add_argument('--batch_size', type = int, help='batch size', default=128)
 
@@ -269,35 +269,49 @@ def accuracy(logit, target, topk=(1,)):
 def train(train_loader,epoch, model1, optimizer1, model2, optimizer2, global_step, wandb_run=None):
     print('Training %s...' % model_str)
 
-    train_total=0
-    train_correct=0
-    train_total2=0
-    train_correct2=0
+    train_total1 = 0
+    train_correct1 = 0
+    train_total2 = 0
+    train_correct2 = 0
 
     for i, (data, labels, indexes) in enumerate(train_loader):
-        ind=indexes.cpu().numpy().transpose()
+        ind = indexes.cpu().numpy().transpose()
 
         labels = Variable(labels).to(device)
 
-        if args.dataset=='news':
+        if args.dataset == 'news':
             data = Variable(data.long()).to(device)
         else:
             data = Variable(data).to(device)
         # Forward + Backward + Optimize
-        logits1=model1(data)
+        logits1 = model1(data)
         prec1,  = accuracy(logits1, labels, topk=(1, ))
-        train_total+=1
-        train_correct+=prec1
+        train_total1 += 1
+        train_correct1 += prec1
 
         logits2 = model2(data)
         prec2,  = accuracy(logits2, labels, topk=(1, ))
-        train_total2+=1
-        train_correct2+=prec2
-        if epoch < init_epoch:
-            loss_1, loss_2, selected_clean_frac1, selected_clean_frac2 = loss_coteaching(logits1, logits2, labels, rate_schedule[epoch], ind, is_label_clean)
+        train_total2 += 1
+        train_correct2 += prec2
+        if epoch < init_epoch or args.model_type != 'coteaching_plus':
+            loss_1, loss_2, selected_clean_frac1, selected_clean_frac2 = loss_coteaching(
+                logits1,
+                logits2,
+                labels,
+                rate_schedule[epoch],
+                ind,
+                is_label_clean,
+            )
         else:
-            if args.model_type=='coteaching_plus':
-                loss_1, loss_2, selected_clean_frac1, selected_clean_frac2 = loss_coteaching_plus(logits1, logits2, labels, rate_schedule[epoch], ind, is_label_clean, epoch*i)
+            loss_1, loss_2, selected_clean_frac1, selected_clean_frac2 = loss_coteaching_plus(
+                logits1,
+                logits2,
+                labels,
+                rate_schedule[epoch],
+                ind,
+                is_label_clean,
+                epoch * i
+            )
 
         optimizer1.zero_grad()
         loss_1.backward()
@@ -323,8 +337,8 @@ def train(train_loader,epoch, model1, optimizer1, model2, optimizer2, global_ste
             log_data['train/selected_clean_frac2'] = selected_clean_frac2
             wandb_run.log(log_data, step=global_step)
 
-    train_acc1=float(train_correct)/float(train_total)
-    train_acc2=float(train_correct2)/float(train_total2)
+    train_acc1 = train_correct1 / train_total1
+    train_acc2 = train_correct2 / train_total2
     return train_acc1, train_acc2, global_step
 
 # Evaluate the Model
@@ -333,34 +347,44 @@ def evaluate(test_loader, model1, model2):
     model1.eval()    # Change model to 'eval' mode.
     correct1 = 0
     total1 = 0
+    total_loss1 = 0.0
     for data, labels, _ in test_loader:
         if args.dataset=='news':
             data = Variable(data.long()).to(device)
         else:
             data = Variable(data).to(device)
         logits1 = model1(data)
+        loss1 = F.cross_entropy(logits1, labels.to(device), reduction='sum')
+        total_loss1 += loss1.item()
+
         outputs1 = F.softmax(logits1, dim=1)
-        _, pred1 = torch.max(outputs1.data, 1)
+        pred1 = torch.argmax(outputs1.data, dim=1)
         total1 += labels.size(0)
-        correct1 += (pred1.cpu() == labels.long()).sum()
+        correct1 += (pred1.cpu() == labels.long()).sum().item()
 
     model2.eval()    # Change model to 'eval' mode
     correct2 = 0
     total2 = 0
+    total_loss2 = 0.0
     for data, labels, _ in test_loader:
         if args.dataset=='news':
             data = Variable(data.long()).to(device)
         else:
             data = Variable(data).to(device)
         logits2 = model2(data)
-        outputs2 = F.softmax(logits2, dim=1)
-        _, pred2 = torch.max(outputs2.data, 1)
-        total2 += labels.size(0)
-        correct2 += (pred2.cpu() == labels.long()).sum()
+        loss2 = F.cross_entropy(logits2, labels.to(device), reduction='sum')
+        total_loss2 += loss2.item()
 
-    acc1 = 100*float(correct1)/float(total1)
-    acc2 = 100*float(correct2)/float(total2)
-    return acc1, acc2
+        outputs2 = F.softmax(logits2, dim=1)
+        pred2 = torch.argmax(outputs2.data, dim=1)
+        total2 += labels.size(0)
+        correct2 += (pred2.cpu() == labels.long()).sum().item()
+
+    acc1 = 100 * correct1 / total1
+    acc2 = 100 * correct2 / total2
+    eval_loss1 = total_loss1 / total1
+    eval_loss2 = total_loss2 / total2
+    return acc1, acc2, eval_loss1, eval_loss2
 
 def main():
     # Data Loader (Input Pipeline)
@@ -457,7 +481,7 @@ def main():
             wandb_run=wandb_run,
         )
         # evaluate models
-        test_acc1, test_acc2 = evaluate(test_loader, clf1, clf2)
+        test_acc1, test_acc2, test_loss1, test_loss2 = evaluate(test_loader, clf1, clf2)
         # save results
         print('Epoch [%d/%d] Test Accuracy on the %s test data: Model1 %.4f %% Model2 %.4f %%' % (epoch+1, args.n_epoch, len(test_dataset), test_acc1, test_acc2))
         with open(txtfile, "a") as myfile:
@@ -470,6 +494,8 @@ def main():
                 'train/accuracy2': train_acc2,
                 'val/accuracy1': test_acc1,
                 'val/accuracy2': test_acc2,
+                'val/loss1': test_loss1,
+                'val/loss2': test_loss2,
             }, step=global_step)
 
 if __name__=='__main__':
