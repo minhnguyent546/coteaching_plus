@@ -36,6 +36,7 @@ parser.add_argument('--num_workers', type=int, default=4, help='how many subproc
 parser.add_argument('--epoch_decay_start', type=int, default=80)
 parser.add_argument('--model_type', type = str, help='[coteaching, coteaching_plus]', default='coteaching_plus')
 parser.add_argument('--fr_type', type = str, help='forget rate type', default='type_1')
+parser.add_argument('--batch_size', type = int, help='batch size', default=128)
 
 # wandb
 parser.add_argument('--wandb_logging',
@@ -76,7 +77,7 @@ torch.manual_seed(args.seed)
 torch.cuda.manual_seed(args.seed)
 
 # Hyper Parameters
-batch_size = 128
+batch_size = args.batch_size
 learning_rate = args.lr
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
